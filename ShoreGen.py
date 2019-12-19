@@ -5,11 +5,17 @@ from shapely.geometry import LineString
 from shapely import affinity
 import geopandas as gpd
 import rasterio
-from rasterio import Affine
+from rasterio import Affine, merge, plot
 from rasterio.enums import Resampling
 from rasterio.crs import CRS
 from skimage import io, measure, transform
 from skimage.morphology import dilation, disk
+
+from sklearn import cluster
+
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import colors
 
 
 def set_env_vars(env_name):
@@ -28,10 +34,7 @@ def set_env_vars(env_name):
     os.environ["GDAL_DATA"] = str(gdal_data_path)
 
 
-if __name__ == '__main__':
-
-    set_env_vars('shore_gen')
-
+def generalize_shoreline():
     img_s0_path = Path(r'Z:\ShoreGen\US4AK4LF_POLY.tif')
     img_s1_path = Path(r'Z:\ShoreGen\US4AK4LF_POLY_s1.tif')
 
@@ -39,7 +42,7 @@ if __name__ == '__main__':
     img = io.imread(img_s0_path)
     img_rasterio = rasterio.open(img_s0_path)
 
-    rescale_factor = 0.1
+    rescale_factor = 0.01
     
     epsg = 26905
     crs = CRS.from_epsg(epsg)
@@ -127,3 +130,167 @@ if __name__ == '__main__':
     gdf = gpd.GeoDataFrame(geometry=contours_list_RIO, crs=crs.to_dict())
     lyr = 'RIO_sf{}'.format(rescale_factor_int)
     gdf.to_file(str(contour_gpkg), layer=lyr, driver='GPKG')
+
+
+class QuickLook:
+
+    def __init__(self):
+        self.tifs = []
+        self.tifs_rgb = []
+        self.out_meta = None
+
+    def get_tile_dems_rgb(self, dem_dir):
+        print('retreiving individual QL DEMs...')
+        for dem in list(dem_dir.glob('*.tif'))[3:6]:
+            src = rasterio.open(dem)
+            self.tifs_rgb.append(src)        
+            self.out_meta = src.meta.copy()  # uses last src made
+
+    def get_classified_dems(self, dem_dir):
+        print('retreiving individual QL DEMs...')
+        for dem in list(dem_dir.glob('*_Kmeans.tif')):
+            src = rasterio.open(dem)
+            self.tifs.append(src)        
+            self.out_meta = src.meta.copy()  # uses last src made
+
+    def classify_water(self, dem_dir, water_dir):
+        print('retreiving individual QL DEMs...')
+        for dem in list(dem_dir.glob('*.tif'))[3:6]:
+
+            img = io.imread(dem)
+            
+            rescale_factor = 0.25
+            img_s1_height = int(img.shape[0] * rescale_factor)
+            img_s1_width = int(img.shape[1] * rescale_factor)
+            output_shape = (1, img_s1_height, img_s1_width)
+            print(output_shape)
+
+            red =  img[:, :, 0]
+            green = img[:, :, 1]
+            blue = img[:, :, 2]
+            nir = img[:, :, 3]
+            
+            ndwi = (green - nir) / (green + nir)
+            ndwi = np.where(np.isfinite(ndwi), ndwi, -1)
+            ndwi = np.expand_dims(ndwi, axis=2)
+
+            ndvi = (red - nir) / (red + nir)
+            ndvi = np.where(np.isfinite(ndvi), ndvi, -1)
+            ndvi = np.expand_dims(ndvi, axis=2)
+
+            img = np.concatenate((img, ndwi, ndvi), axis=2)
+
+            print('rescaling image ({})...'.format(rescale_factor))
+            img_s1_ski = transform.resize(img, output_shape[1:], anti_aliasing=True)
+
+            x, y, z = img_s1_ski.shape
+            img_2d = img_s1_ski.reshape(x*y, z)
+
+            print('K-means clustering...')
+            k_cluster = cluster.KMeans(n_clusters=3, n_jobs=-6)
+            k_cluster.fit(img_2d)
+            k_centers = k_cluster.cluster_centers_
+            k_labels = k_cluster.labels_
+
+            cluster_colors = np.asarray([1, 2, 3, 4, 5])
+
+            k_means_img = cluster_colors[k_labels].reshape(x, y).astype('uint8')
+
+            plt.figure(figsize=(8, 8))
+            plt.imshow(k_means_img)
+            plt.show()
+
+            print('classifying {}...'.format(dem))
+            src = rasterio.open(dem)
+            
+            red =  src.read(1)
+            green = src.read(2)
+            blue = src.read(3)
+            nir = src.read(4)
+            #ndwi = (green - nir) / (green + nir)
+            #ndwi = np.where(np.isfinite(ndwi), ndwi, -1)
+            
+            water = np.where(nir < 90, 1, 0).astype(np.uint8)
+
+            meta = src.profile
+            t = meta['transform']
+            resize_offset = 1 / rescale_factor
+            t_affine = Affine(t.a / rescale_factor, t.b, t.c, 
+                               t.d, t.e / rescale_factor, t.f)
+
+            meta.update(count=1, 
+                        height=x, 
+                        width=y, 
+                        dtype='uint8',
+                        transform=t_affine)
+
+            #fig = plt.figure()
+            #ax = Axes3D(fig)
+            #ax.scatter(red.flatten()[0:100000], green.flatten()[0:100000], blue.flatten()[0:100000])
+            #plt.show()
+
+            ndwi_path = water_dir / '{}_Kmeans.tif'.format(dem.stem)
+            with rasterio.open(ndwi_path, 'w', **meta) as dst:
+                dst.write(k_means_img, 1)
+
+    def gen_rgb_mosaic(self, dem_dir, water_dir):
+        rgb_mosaic_path = water_dir / 'RGB.tif'
+        self.get_tile_dems_rgb(dem_dir)
+        if self.tifs_rgb:
+            print('generating {}...'.format(rgb_mosaic_path))
+            mosaic, out_trans = merge.merge(self.tifs_rgb)
+            self.out_meta.update({
+                'driver': "GTiff",
+                'height': mosaic.shape[1],
+                'width': mosaic.shape[2],
+                'transform': out_trans})
+
+            with rasterio.open(rgb_mosaic_path, 'w', **self.out_meta) as dest:
+                dest.write(mosaic)
+
+        else:
+            print('No DEM tiles were generated.')
+
+    def gen_mosaic(self, water_dir):
+        water_path = water_dir / 'WATER.tif'
+        self.get_classified_dems(water_dir)
+        if self.tifs:
+            print('generating {}...'.format(water_path))
+            mosaic, out_trans = merge.merge(self.tifs)
+            self.out_meta.update({
+                'driver': "GTiff",
+                'height': mosaic.shape[1],
+                'width': mosaic.shape[2],
+                'transform': out_trans})
+
+            with rasterio.open(water_path, 'w', **self.out_meta) as dest:
+                dest.write(mosaic)
+
+        else:
+            print('No DEM tiles were generated.')
+
+
+def main():
+
+    tif_dir = Path(r'\\ngs-s-rsd\Lidar_Contract00\TX1803\Imagery\ortho\UTM14')
+    water_dir = Path(r'C:\QAQC_contract') 
+
+    tif_paths = list(tif_dir.glob('*.las'))
+    num_tif_paths = len(list(tif_paths))
+
+    ql = QuickLook()
+
+    ql.classify_water(tif_dir, water_dir)
+
+    water_path = water_dir / 'ShorelineMOSAIC.tif'
+    ql.gen_mosaic(water_dir)
+    ql.gen_rgb_mosaic(tif_dir, water_dir)
+
+
+if __name__ == '__main__':
+
+    set_env_vars('shore_gen')
+
+    #generalize_shoreline()
+
+    main()
