@@ -187,7 +187,7 @@ class QuickLook:
             img_2d = img_s1_ski.reshape(x*y, z)
 
             print('K-means clustering...')
-            k_cluster = cluster.KMeans(n_clusters=3, n_jobs=-6)
+            k_cluster = cluster.KMeans(n_clusters=5, n_jobs=-6)
             k_cluster.fit(img_2d)
             k_centers = k_cluster.cluster_centers_
             k_labels = k_cluster.labels_
