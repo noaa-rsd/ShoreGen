@@ -35,16 +35,17 @@ def set_env_vars(env_name):
 
 
 def generalize_shoreline():
-    img_s0_path = Path(r'Z:\ShoreGen\US4AK4LF_POLY.tif')
-    img_s1_path = Path(r'Z:\ShoreGen\US4AK4LF_POLY_s1.tif')
+    img_s0_path = Path(r'C:\QAQC_contract\WATER.tif')
+    img_s1_path = Path(r'C:\QAQC_contract\WATER_s1.tif')
 
     print('reading image...')
     img = io.imread(img_s0_path)
     img_rasterio = rasterio.open(img_s0_path)
 
-    rescale_factor = 0.01
+    rescale_factor = 0.1
     
-    epsg = 26905
+    epsg = 26905  # NAD83/UTM Zone 5N
+    epsg = 26914  # NAD83/UTM Zone 14N
     crs = CRS.from_epsg(epsg)
 
     simplify = 20
@@ -62,19 +63,22 @@ def generalize_shoreline():
 
     img_s1_height = int(img.shape[0] * rescale_factor)
     img_s1_width = int(img.shape[1] * rescale_factor)
-    output_shape = (1, img_s1_height, img_s1_width)
-    print(output_shape)
+
+    output_shape_SKI = (img_s1_height, img_s1_width, 4)
+    output_shape_RAS = (1, img_s1_height, img_s1_width)
+    print('output shape (Skimage):  {}'.format(output_shape_SKI))
+    print('output shape (Rasterio):  {}'.format(output_shape_RAS))
 
     print('rescaling image ({})...'.format(rescale_factor))
-    img_s1_ski = transform.resize(img, output_shape[1:], anti_aliasing=True)
+    img_s1_ski = transform.resize(img, output_shape_SKI, anti_aliasing=True).astype('uint8')
 
     print('dilating skimage resized LNDARE...')
     disk_size = 1
-    img_s1_ski = dilation(img_s1_ski, disk(disk_size))
+    #img_s1_ski = dilation(img_s1_ski, disk(disk_size))
 
     print('resampling rasterio img...')
     with rasterio.open(str(img_s0_path)) as f:
-        img_s1_rio = f.read(out_shape=output_shape,
+        img_s1_rio = f.read(out_shape=output_shape_RAS,
                             resampling=Resampling.average)
 
     profile = img_rasterio.profile
@@ -82,24 +86,23 @@ def generalize_shoreline():
     
     resize_offset = 1 / rescale_factor
 
-    transform = Affine(t.a / rescale_factor, t.b, t.c + resize_offset, 
-                       t.d, t.e / rescale_factor, t.f - resize_offset)
+    t_affine = Affine(t.a / rescale_factor, t.b, t.c, 
+                      t.d, t.e / rescale_factor, t.f)
 
     shapely_affine = (t.a / rescale_factor, t.b, t.d,
-                      t.e / rescale_factor, 
-                      t.c + resize_offset, 
-                      t.f - resize_offset)
+                      t.e / rescale_factor, t.c, t.f)
     
     profile.update(
         height=img_s1_height,
         width=img_s1_width,
         count=1,
         crs=crs.wkt,
-        transform=transform)
+        dtype='uint8',
+        transform=t_affine)
 
     print('writing {}...'.format(img_s1_path))
     with rasterio.open(str(img_s1_path), 'w', **profile) as dst:
-        dst.write(img_s1_rio.squeeze(), 1)
+        dst.write(img_s1_ski, 4)
 
     img_s1_rio = np.ma.array(img_s1_rio.squeeze(), mask=(img_s1_rio == 1))
 
@@ -119,7 +122,7 @@ def generalize_shoreline():
         c_trans = affinity.affine_transform(LineString(c), shapely_affine)
         contours_list_RIO.append(c_trans)
 
-    contour_gpkg = Path(r'Z:\ShoreGen\US4AK4LF_SL.gpkg')
+    contour_gpkg = Path(r'C:\QAQC_contract\WATER.gpkg')
     rescale_factor_int = int(1 / rescale_factor)
 
     gdf = gpd.GeoDataFrame(geometry=contours_list_SKI, crs=crs.to_dict())
@@ -165,52 +168,50 @@ class QuickLook:
             output_shape = (1, img_s1_height, img_s1_width)
             print(output_shape)
 
-            red =  img[:, :, 0]
-            green = img[:, :, 1]
-            blue = img[:, :, 2]
-            nir = img[:, :, 3]
+            #red =  img[:, :, 0]
+            #green = img[:, :, 1]
+            #blue = img[:, :, 2]
+            #nir = img[:, :, 3]
             
-            ndwi = (green - nir) / (green + nir)
-            ndwi = np.where(np.isfinite(ndwi), ndwi, -1)
-            ndwi = np.expand_dims(ndwi, axis=2)
+            #ndwi = (green - nir) / (green + nir)
+            #ndwi = np.where(np.isfinite(ndwi), ndwi, -1)
+            #ndwi = np.expand_dims(ndwi, axis=2)
 
-            ndvi = (red - nir) / (red + nir)
-            ndvi = np.where(np.isfinite(ndvi), ndvi, -1)
-            ndvi = np.expand_dims(ndvi, axis=2)
-
-            img = np.concatenate((img, ndwi, ndvi), axis=2)
+            #ndvi = (red - nir) / (red + nir)
+            #ndvi = np.where(np.isfinite(ndvi), ndvi, -1)
+            #ndvi = np.expand_dims(ndvi, axis=2)
 
             print('rescaling image ({})...'.format(rescale_factor))
             img_s1_ski = transform.resize(img, output_shape[1:], anti_aliasing=True)
 
             x, y, z = img_s1_ski.shape
-            img_2d = img_s1_ski.reshape(x*y, z)
+            #img_2d = img_s1_ski.reshape(x*y, z)
 
-            print('K-means clustering...')
-            k_cluster = cluster.KMeans(n_clusters=5, n_jobs=-6)
-            k_cluster.fit(img_2d)
-            k_centers = k_cluster.cluster_centers_
-            k_labels = k_cluster.labels_
+            #print('K-means clustering...')
+            #k_cluster = cluster.KMeans(n_clusters=5, n_jobs=-6)
+            #k_cluster.fit(img_2d)
+            #k_centers = k_cluster.cluster_centers_
+            #k_labels = k_cluster.labels_
 
-            cluster_colors = np.asarray([1, 2, 3, 4, 5])
+            #cluster_colors = np.asarray([1, 2, 3, 4, 5])
 
-            k_means_img = cluster_colors[k_labels].reshape(x, y).astype('uint8')
+            #k_means_img = cluster_colors[k_labels].reshape(x, y).astype('uint8')
 
-            plt.figure(figsize=(8, 8))
-            plt.imshow(k_means_img)
-            plt.show()
+            #plt.figure(figsize=(8, 8))
+            #plt.imshow(k_means_img)
+            #plt.show()
 
             print('classifying {}...'.format(dem))
             src = rasterio.open(dem)
             
-            red =  src.read(1)
-            green = src.read(2)
-            blue = src.read(3)
-            nir = src.read(4)
-            #ndwi = (green - nir) / (green + nir)
-            #ndwi = np.where(np.isfinite(ndwi), ndwi, -1)
+            red =  img_s1_ski[:,:,0]
+            green = img_s1_ski[:,:,1]
+            blue = img_s1_ski[:,:,2]
+            nir = img_s1_ski[:,:,3]
             
-            water = np.where(nir < 90, 1, 0).astype(np.uint8)
+            ndwi = (green - nir) / (green + nir)
+            ndwi = np.where(np.isfinite(ndwi), ndwi, -1)            
+            water = np.where(ndwi > 0, 0, 1).astype(np.uint8)
 
             meta = src.profile
             t = meta['transform']
@@ -221,7 +222,8 @@ class QuickLook:
             meta.update(count=1, 
                         height=x, 
                         width=y, 
-                        dtype='uint8',
+                        #dtype='float64',
+                        nodata=1,
                         transform=t_affine)
 
             #fig = plt.figure()
@@ -230,8 +232,8 @@ class QuickLook:
             #plt.show()
 
             ndwi_path = water_dir / '{}_Kmeans.tif'.format(dem.stem)
-            with rasterio.open(ndwi_path, 'w', **meta) as dst:
-                dst.write(k_means_img, 1)
+            with rasterio.open(ndwi_path, 'w', n_bits=1, **meta) as dst:
+                dst.write(water, 1)
 
     def gen_rgb_mosaic(self, dem_dir, water_dir):
         rgb_mosaic_path = water_dir / 'RGB.tif'
@@ -291,6 +293,5 @@ if __name__ == '__main__':
 
     set_env_vars('shore_gen')
 
-    #generalize_shoreline()
-
-    main()
+    #main()
+    generalize_shoreline()
