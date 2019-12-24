@@ -170,6 +170,7 @@ def main():
         'NAD83/UTM Zone 5N': 26905,
         'NAD83/UTM Zone 14N': 26914,
         }
+    crs_epsg = epsgs['NAD83/UTM Zone 14N']
 
     for i, tif_path in enumerate(tif_paths, 1):
 
@@ -196,7 +197,6 @@ def main():
 
     # extract vector shoreline
     contour_geomety = shoreline_raster.to_vector(dilated_mosaic)
-    crs_epsg = epsgs['NAD83/UTM Zone 14N']
     shoreline = Shoreline(contour_geomety, crs_epsg)
 
     # carogrpahically generalize contours
@@ -205,7 +205,7 @@ def main():
     # export cartographically generalized shoreline
     contour_gpkg = out_dir / 'Shoreline.gpkg'
     lyr = 'NDVI'
-    shoreline.export()
+    shoreline.export(contour_gpkg, lyr)
 
 
 if __name__ == '__main__':
