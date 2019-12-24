@@ -34,113 +34,113 @@ def set_env_vars(env_name):
     os.environ["GDAL_DATA"] = str(gdal_data_path)
 
 
-def generalize_shoreline():
-    img_s0_path = Path(r'C:\QAQC_contract\WATER.tif')
-    img_s1_path = Path(r'C:\QAQC_contract\WATER_s1.tif')
 
-    print('reading image...')
-    img = io.imread(img_s0_path)
-    img_rasterio = rasterio.open(img_s0_path)
-
-    rescale_factor = 0.1
-    
-    epsg = 26905  # NAD83/UTM Zone 5N
-    epsg = 26914  # NAD83/UTM Zone 14N
-    crs = CRS.from_epsg(epsg)
-
-    simplify = 20
-    smoothing = None
-
-    n = 4250
-    e = 16500
-    s = 6000
-    w = 14500
-
-    n_r = n * rescale_factor
-    e_r = e * rescale_factor
-    s_r = s * rescale_factor
-    w_r = w * rescale_factor
-
-    img_s1_height = int(img.shape[0] * rescale_factor)
-    img_s1_width = int(img.shape[1] * rescale_factor)
-
-    output_shape_SKI = (img_s1_height, img_s1_width, 4)
-    output_shape_RAS = (1, img_s1_height, img_s1_width)
-    print('output shape (Skimage):  {}'.format(output_shape_SKI))
-    print('output shape (Rasterio):  {}'.format(output_shape_RAS))
-
-    print('rescaling image ({})...'.format(rescale_factor))
-    img_s1_ski = transform.resize(img, output_shape_SKI, anti_aliasing=True).astype('uint8')
-
-    print('dilating skimage resized LNDARE...')
-    disk_size = 1
-    #img_s1_ski = dilation(img_s1_ski, disk(disk_size))
-
-    print('resampling rasterio img...')
-    with rasterio.open(str(img_s0_path)) as f:
-        img_s1_rio = f.read(out_shape=output_shape_RAS,
-                            resampling=Resampling.average)
-
-    profile = img_rasterio.profile
-    t = img_rasterio.meta['transform']
-    
-    resize_offset = 1 / rescale_factor
-
-    t_affine = Affine(t.a / rescale_factor, t.b, t.c, 
-                      t.d, t.e / rescale_factor, t.f)
-
-    shapely_affine = (t.a / rescale_factor, t.b, t.d,
-                      t.e / rescale_factor, t.c, t.f)
-    
-    profile.update(
-        height=img_s1_height,
-        width=img_s1_width,
-        count=1,
-        crs=crs.wkt,
-        dtype='uint8',
-        transform=t_affine)
-
-    print('writing {}...'.format(img_s1_path))
-    with rasterio.open(str(img_s1_path), 'w', **profile) as dst:
-        dst.write(img_s1_ski, 4)
-
-    img_s1_rio = np.ma.array(img_s1_rio.squeeze(), mask=(img_s1_rio == 1))
-
-    print('creating contours...')
-    contours_SKI = measure.find_contours(img_s1_ski, 0.0)
-    contours_RIO = measure.find_contours(img_s1_rio, 0.0)
-        
-    contours_list_SKI = []
-    for c in contours_SKI:
-        c[:, [0, 1]] = c[:, [1, 0]]
-        c_trans = affinity.affine_transform(LineString(c), shapely_affine)
-        contours_list_SKI.append(c_trans)
-
-    contours_list_RIO = []
-    for c in contours_RIO:
-        c[:, [0, 1]] = c[:, [1, 0]]
-        c_trans = affinity.affine_transform(LineString(c), shapely_affine)
-        contours_list_RIO.append(c_trans)
-
-    contour_gpkg = Path(r'C:\QAQC_contract\WATER.gpkg')
-    rescale_factor_int = int(1 / rescale_factor)
-
-    gdf = gpd.GeoDataFrame(geometry=contours_list_SKI, crs=crs.to_dict())
-    gdf.geometry = gdf.geometry.simplify(tolerance=simplify, preserve_topology=True)
-    lyr = 'SKI_sf{}'.format(rescale_factor_int)
-    gdf.to_file(str(contour_gpkg), layer=lyr, driver='GPKG')
-
-    gdf = gpd.GeoDataFrame(geometry=contours_list_RIO, crs=crs.to_dict())
-    lyr = 'RIO_sf{}'.format(rescale_factor_int)
-    gdf.to_file(str(contour_gpkg), layer=lyr, driver='GPKG')
-
-
-class QuickLook:
+class ShoreGen:
 
     def __init__(self):
         self.tifs = []
         self.tifs_rgb = []
         self.out_meta = None
+
+    def generalize_shoreline():
+        img_s0_path = Path(r'C:\QAQC_contract\WATER.tif')
+        img_s1_path = Path(r'C:\QAQC_contract\WATER_s1.tif')
+
+        print('reading image...')
+        img = io.imread(img_s0_path)
+        img_rasterio = rasterio.open(img_s0_path)
+
+        rescale_factor = 0.1
+    
+        epsg = 26905  # NAD83/UTM Zone 5N
+        epsg = 26914  # NAD83/UTM Zone 14N
+        crs = CRS.from_epsg(epsg)
+
+        simplify = 20
+        smoothing = None
+
+        n = 4250
+        e = 16500
+        s = 6000
+        w = 14500
+
+        n_r = n * rescale_factor
+        e_r = e * rescale_factor
+        s_r = s * rescale_factor
+        w_r = w * rescale_factor
+
+        img_s1_height = int(img.shape[0] * rescale_factor)
+        img_s1_width = int(img.shape[1] * rescale_factor)
+
+        output_shape_SKI = (img_s1_height, img_s1_width, 4)
+        output_shape_RAS = (1, img_s1_height, img_s1_width)
+        print('output shape (Skimage):  {}'.format(output_shape_SKI))
+        print('output shape (Rasterio):  {}'.format(output_shape_RAS))
+
+        print('rescaling image ({})...'.format(rescale_factor))
+        img_s1_ski = transform.resize(img, output_shape_SKI, anti_aliasing=True).astype('uint8')
+
+        print('dilating skimage resized LNDARE...')
+        disk_size = 1
+        #img_s1_ski = dilation(img_s1_ski, disk(disk_size))
+
+        print('resampling rasterio img...')
+        with rasterio.open(str(img_s0_path)) as f:
+            img_s1_rio = f.read(out_shape=output_shape_RAS,
+                                resampling=Resampling.average)
+
+        profile = img_rasterio.profile
+        t = img_rasterio.meta['transform']
+    
+        resize_offset = 1 / rescale_factor
+
+        t_affine = Affine(t.a / rescale_factor, t.b, t.c, 
+                          t.d, t.e / rescale_factor, t.f)
+
+        shapely_affine = (t.a / rescale_factor, t.b, t.d,
+                          t.e / rescale_factor, t.c, t.f)
+    
+        profile.update(
+            height=img_s1_height,
+            width=img_s1_width,
+            count=1,
+            crs=crs.wkt,
+            dtype='uint8',
+            transform=t_affine)
+
+        print('writing {}...'.format(img_s1_path))
+        with rasterio.open(str(img_s1_path), 'w', **profile) as dst:
+            dst.write(img_s1_ski, 4)
+
+        img_s1_rio = np.ma.array(img_s1_rio.squeeze(), mask=(img_s1_rio == 1))
+
+        print('creating contours...')
+        contours_SKI = measure.find_contours(img_s1_ski, 0.0)
+        contours_RIO = measure.find_contours(img_s1_rio, 0.0)
+        
+        contours_list_SKI = []
+        for c in contours_SKI:
+            c[:, [0, 1]] = c[:, [1, 0]]
+            c_trans = affinity.affine_transform(LineString(c), shapely_affine)
+            contours_list_SKI.append(c_trans)
+
+        contours_list_RIO = []
+        for c in contours_RIO:
+            c[:, [0, 1]] = c[:, [1, 0]]
+            c_trans = affinity.affine_transform(LineString(c), shapely_affine)
+            contours_list_RIO.append(c_trans)
+
+        contour_gpkg = Path(r'C:\QAQC_contract\WATER.gpkg')
+        rescale_factor_int = int(1 / rescale_factor)
+
+        gdf = gpd.GeoDataFrame(geometry=contours_list_SKI, crs=crs.to_dict())
+        gdf.geometry = gdf.geometry.simplify(tolerance=simplify, preserve_topology=True)
+        lyr = 'SKI_sf{}'.format(rescale_factor_int)
+        gdf.to_file(str(contour_gpkg), layer=lyr, driver='GPKG')
+
+        gdf = gpd.GeoDataFrame(geometry=contours_list_RIO, crs=crs.to_dict())
+        lyr = 'RIO_sf{}'.format(rescale_factor_int)
+        gdf.to_file(str(contour_gpkg), layer=lyr, driver='GPKG')
 
     def get_tile_dems_rgb(self, dem_dir):
         print('retreiving individual QL DEMs...')
@@ -226,11 +226,6 @@ class QuickLook:
                         nodata=1,
                         transform=t_affine)
 
-            #fig = plt.figure()
-            #ax = Axes3D(fig)
-            #ax.scatter(red.flatten()[0:100000], green.flatten()[0:100000], blue.flatten()[0:100000])
-            #plt.show()
-
             ndwi_path = water_dir / '{}_Kmeans.tif'.format(dem.stem)
             with rasterio.open(ndwi_path, 'w', n_bits=1, **meta) as dst:
                 dst.write(water, 1)
@@ -280,7 +275,7 @@ def main():
     tif_paths = list(tif_dir.glob('*.las'))
     num_tif_paths = len(list(tif_paths))
 
-    ql = QuickLook()
+    ql = ShoreGen()
 
     ql.classify_water(tif_dir, water_dir)
 
@@ -288,10 +283,23 @@ def main():
     ql.gen_mosaic(water_dir)
     ql.gen_rgb_mosaic(tif_dir, water_dir)
 
+    generalize_shoreline()
+
+    # open RGB tif
+
+    # calc index raster
+
+    # threshold index raster
+
+    # resize boolean raster
+
+    # generalize boolean raster
+
+    # generalized boolean raster to polygon
+
+    # extract contours
+
 
 if __name__ == '__main__':
-
     set_env_vars('shore_gen')
-
-    #main()
-    generalize_shoreline()
+    main()
