@@ -11,3 +11,5 @@ gpkg_path = Path(r'\\ngs-s-rsd\Lidar_Contract00\TX1803\Imagery\ortho\shp\TX1803.
 layer = 'NDWI_Contour'
 print('writing gpkg...')
 gdf.to_file(gpkg_path, layer=layer, driver='GPKG')
+
+
