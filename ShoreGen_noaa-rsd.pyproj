@@ -23,6 +23,9 @@
     <Compile Include="filesizeformat.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Schema.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="ShoreShape.py">
       <SubType>Code</SubType>
     </Compile>
