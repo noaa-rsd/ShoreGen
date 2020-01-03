@@ -45,30 +45,30 @@
     "Data type": "Text",
     "Width": 32,
     "Definition": "Data Source describing the type of imagery used in compilation",
-    "Domain": "Aerial Photography, Satellite Imagery, Lidar, IFSAR, SAR, HyperSpectral, Multispectral"
+    "Domain": [ "Aerial Photography", "Satellite", "Imagery", "Lidar", "IFSAR", "SAR", "HyperSpectral", "Multispectral" ]
   },
   "EXT_METH": {
     "Data type": "Text",
     "Width": 6,
     "Definition": "Method used to extract feature from source",
-    "Domain": "Mono, Stereo, Derived"
+    "Domain": [ "Mono", "Stereo", "Derived" ]
   },
   "DAT_SET_CR": {
     "Data type": "Text",
     "Width": 50,
     "Definition": "Data Set Credit of original compiled shoreline",
-    "Domain": "Free text"
+    "Domain": [ "NOAA" ]
   },
   "FIPS_ALPHA": {
     "Data type": "Text",
     "Width": 2,
     "Definition": "two- letter FIPS State Alpha Code for each State and the District of Columbia. The FIPS State Alpha Code is identical to the two-letter U.S. Postal Service (USPS) abbreviation for each entity. Areas not included in the FIPS State Alpha Code are identified as \"99\".",
-    "Domain": "99, AK, AL, AS, CA, CT, DC, DE, FL, GA, GU, HI, ID, IL, IN, LA, MA, MD, ME, MI, MN, MP, MS, NC, NH, NJ, NY, OH, OR, PA, PR, RI, SC, TX, UM, VA, VI, VT, WA, WI"
+    "Domain": [ "99", "AK", "AL", "AS", "CA", "CT", "DC", "DE", "FL", "GA", "GU", "HI", "ID", "IL", "IN", "LA", "MA", "MD", "ME", "MI", "MN", "MP", "MS", "NC", "NH", "NJ", "NY", "OH", "OR", "PA", "PR", "RI", "SC", "TX", "UM", "VA", "VI", "VT", "WA", "WI" ]
   },
   "NOAA_Regio": {
     "Data type": "Text",
     "Width": 32,
     "Definition": "NOAA Regional Collaboration",
-    "Domain": "Alaska, Great Lakes, Gulf of Mexico, North Atlantic, Pacific Islands, Southeast and Caribbean, Western"
+    "Domain": [ "Alaska", "Great Lakes", "Gulf of Mexico", "North Atlantic", "Pacific Islands", "Southeast and Caribbean", "Western" ]
   }
 }

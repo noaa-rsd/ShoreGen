@@ -1,32 +1,53 @@
+import os
 import json
 import geopandas as gpd
 from pathlib import Path
+import arcpy
 
 from Schema import Schema
 
 
-class Shoreline:
+class ShorelineTile:
 
-    def __init__(self):
-        pass
+    def __init__(self, params):
+        self.set_params(params)
 
+    def set_params(self, params):
+        for i, p in enumerate(params):
+            self.__dict__[p.name] = p.value
+
+    def export(self):
+        out_path =  proj_dir / '{}_ATTRIBUTED.shp'.format(shp.stem)
+        gdf.to_file(out_path, driver='ESRI Shapefile')
+
+        
 
 if __name__ == '__main__':
 
-    schema_path = Path(r'Z:\ShoreGen\ShoreGen_noaa-rsd\shoreline_schema.json')
+    cwd = os.path.dirname(os.path.realpath(__file__))
+    os.chdir(cwd)
+
+    schema_path = Path(r'.\shoreline_schema.json')
     schema = Schema(schema_path)
-    print(schema)
+    #arcpy.AddMessage(schema)
 
-    #proj_dir = Path(r'\\ngs-s-rsd\Lidar_Contract00\TX1803\Imagery\ortho\shp')
-    #shp_dir = proj_dir / 'tiles'
+    proj_dir = Path(r'\\ngs-s-rsd\Lidar_Contract00\TX1803\Imagery\ortho\shp')
+    shp_dir = proj_dir / 'tiles'
+    
+    slt = ShorelineTile(arcpy.GetParameterInfo())
+    shp_paths = [Path(shp) for shp in slt.shp_paths.exportToString().split(';')]
+    num_shps = len(shp_paths)
 
-    #shps = list(shp_dir.glob('*.shp'))
-    #num_shps = len(shps)
-    #for i, shp in enumerate(shps, 1):
-    #    print('processing {} ({} of {})...'.format(shp.name, i, num_shps))
-    #    gdf = gpd.read_file(str(shp))
+    for i, shp in enumerate(shp_paths, 1):
+        arcpy.AddMessage('{} ({} of {})...'.format(shp.name, i, num_shps))
+        gdf = gpd.read_file(str(shp))
 
-    #    #if not gdf.empty:
-    #    #    gpkg_path =  proj_dir / 'TX1803.gpkg'
-    #    #    layer = 'shp_{}'.format(shp.stem)
-    #    #    gdf.to_file(gpkg_path, layer=layer, driver='GPKG')
+        if not gdf.empty:
+
+            # apply tile-wide attributes
+
+            # determine FIPS Alpha(s)
+
+            # determine NOAA Region(s)
+
+            # output attributed gdf
