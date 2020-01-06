@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{82077fb3-0636-43ca-ac6e-6770e0c8fcc4}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>ShoreShape.py</StartupFile>
+    <StartupFile>Schema.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
