@@ -37,20 +37,37 @@ class ShorelineTile():
     def apply_state_region_attributes(self, state_regions):
         if state_regions.shape[0] == 1:
             arcpy.AddMessage(state_regions.iloc[0]['STATE_FIPS'])
-            self.gdf['ATTRIBUTE'] = str(None)
+            self.gdf['ATTRIBUTE'] = None
             self.gdf['FIPS_ALPHA'] = state_regions.iloc[0]['STATE_FIPS']
             self.gdf['NOAA_Regio'] = state_regions.iloc[0]['NOAA_Regio']
         elif state_regions.shape[0] > 1:
-            for state_region in state_regions:
-                
-                pass
-                # get shoreline in state_region
+            shoreline_gdfs = []
+            for state_region in state_regions.geometry:
+                arcpy.AddMessage(state.region)
+                arcpy.AddMessage('get shoreline intersecting state_region...')
+                sindex = self.gdf.sindex
+                intersect_idx = list(sindex.intersection(state_region.bounds))
+                possible_shoreline = self.gdf.iloc[intersect_idx]
+                out_path = str(Path(r'.\support\TEST.shp'))
+                possible_shoreline.to_file(out_path, driver='ESRI Shapefile')
 
+                arcpy.AddMessage('clip intersecting shoreline with region...')  # TODO: TAKING LONG TIME
+                shoreline = possible_shoreline.intersection(state_region)
+                arcpy.AddMessage(shoreline)
 
-                # attribute state_region shoreline
+                arcpy.AddMessage('attribute state_region shoreline...')
+                shoreline['ATTRIBUTE'] = None
+                shoreline['FIPS_ALPHA'] = state_region['STATE_FIPS']
+                shoreline['NOAA_Regio'] = state_region['NOAA_Regio']
+
+                shoreline_gdfs.append(shoreline)
+
+            df = pd.concat(shoreline_bits, ignore_index=True)
+            self.gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=self.gdf.crs)
 
     def get_overlapping_state_regions(self):
-        noaa_region_states_path = Path(r'.\support\state_regions.shp')
+        #noaa_region_states_path = Path(r'.\support\state_regions.shp')
+        noaa_region_states_path = Path(r'.\support\NOAA_Region_STATES_1_Union.shp')
         state_regions = gpd.read_file(str(noaa_region_states_path))
         state_regions = state_regions.to_crs(self.gdf.crs)
         sindex = state_regions.sindex
