@@ -1,10 +1,11 @@
 import os
 import json
+import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 import arcpy
 from datetime import datetime
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiLineString
 from matplotlib import pyplot as plt
 
 from Schema import Schema
@@ -36,24 +37,21 @@ class ShorelineTile():
 
     def apply_state_region_attributes(self, state_regions):
         if state_regions.shape[0] == 1:
-            arcpy.AddMessage(state_regions.iloc[0]['STATE_FIPS'])
             self.gdf['ATTRIBUTE'] = None
             self.gdf['FIPS_ALPHA'] = state_regions.iloc[0]['STATE_FIPS']
             self.gdf['NOAA_Regio'] = state_regions.iloc[0]['NOAA_Regio']
         elif state_regions.shape[0] > 1:
             shoreline_gdfs = []
-            for state_region in state_regions.geometry:
-                arcpy.AddMessage(state.region)
+            for i, state_region in state_regions.iterrows():
                 arcpy.AddMessage('get shoreline intersecting state_region...')
                 sindex = self.gdf.sindex
-                intersect_idx = list(sindex.intersection(state_region.bounds))
+                intersect_idx = list(sindex.intersection(state_region.geometry.bounds))
                 possible_shoreline = self.gdf.iloc[intersect_idx]
-                out_path = str(Path(r'.\support\TEST.shp'))
-                possible_shoreline.to_file(out_path, driver='ESRI Shapefile')
 
                 arcpy.AddMessage('clip intersecting shoreline with region...')  # TODO: TAKING LONG TIME
-                shoreline = possible_shoreline.intersection(state_region)
-                arcpy.AddMessage(shoreline)
+                arcpy.AddMessage(MultiLineString(list(possible_shoreline.geometry)))
+                shoreline = possible_shoreline.intersection(state_region.geometry)  # TODO: need GeoSeries or GeoDataFrame?
+                shoreline = gpd.GeoDataFrame(geometry=shoreline, crs=self.gdf.crs)
 
                 arcpy.AddMessage('attribute state_region shoreline...')
                 shoreline['ATTRIBUTE'] = None
@@ -62,12 +60,12 @@ class ShorelineTile():
 
                 shoreline_gdfs.append(shoreline)
 
-            df = pd.concat(shoreline_bits, ignore_index=True)
+            df = pd.concat(shoreline_gdfs, ignore_index=True)
             self.gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=self.gdf.crs)
 
     def get_overlapping_state_regions(self):
         #noaa_region_states_path = Path(r'.\support\state_regions.shp')
-        noaa_region_states_path = Path(r'.\support\NOAA_Region_STATES_1_Union.shp')
+        noaa_region_states_path = Path(r'.\support\state_regions_FAUX_TEST.shp')
         state_regions = gpd.read_file(str(noaa_region_states_path))
         state_regions = state_regions.to_crs(self.gdf.crs)
         sindex = state_regions.sindex
@@ -76,7 +74,17 @@ class ShorelineTile():
         return state_regions.iloc[region_states_idx]
 
     def get_tile_extents(self):
+
+        def temp_total_bounds():
+            bounds = self.gdf.geometry.bounds
+            minx = bounds['minx'].min()
+            miny = bounds['miny'].min()
+            maxx = bounds['maxx'].max()
+            maxy = bounds['maxy'].max()
+            return minx, miny, maxx, maxy
+
         minx, miny, maxx, maxy = self.gdf.geometry.total_bounds
+        minx, miny, maxx, maxy = temp_total_bounds()
         poly_coords = [(minx, miny), (minx, maxy), 
                        (maxx, maxy), (maxx, miny)]
         return Polygon(poly_coords)
@@ -86,6 +94,8 @@ def set_env_vars(env_name):
     user_dir = os.path.expanduser('~')
     path_parts = ('AppData', 'Local', 
                   'Continuum', 'anaconda3')
+    path_parts = ('AppData', 'Local', 
+                  'conda', 'conda')
     conda_dir = Path(user_dir).joinpath(*path_parts)
     env_dir = conda_dir / 'envs' / env_name
     share_dir = env_dir / 'Library' / 'share'
@@ -108,8 +118,6 @@ if __name__ == '__main__':
     schema_path = Path(r'.\shoreline_schema.json')
     schema = Schema(schema_path)
 
-    proj_dir = Path(r'\\ngs-s-rsd\Lidar_Contract00\TX1803\Imagery\ortho\shp')
-
     slt = ShorelineTile(arcpy.GetParameterInfo(), schema)
     shps = [Path(shp) for shp in slt.shp_paths.exportToString().split(';')]
     num_shps = len(shps)
@@ -121,15 +129,15 @@ if __name__ == '__main__':
 
         if not slt.gdf.empty:
 
-            # apply tile-wide attributes
-            slt.apply_tile_attributes()
-
             # determine overlapping state NOAA regions
             state_regions = slt.get_overlapping_state_regions()
 
             # apply state-region attributes
             slt.apply_state_region_attributes(state_regions)
 
+            # apply tile-wide attributes
+            slt.apply_tile_attributes()
+
             # output attributed gdf
-            out_path =  proj_dir / '{}_ATTRIBUTED.shp'.format(shp.stem)
+            out_path = Path(slt.out_dir.value) / 'TEST_OUTPUT_FINAL.shp'
             slt.export(out_path)

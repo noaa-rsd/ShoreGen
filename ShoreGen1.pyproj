@@ -21,9 +21,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="filesizeformat.py" />
-    <Compile Include="module1.py" />
-    <Compile Include="module2.py" />
     <Compile Include="ShoreGen.py" />
+    <Compile Include="ShoreShape.py" />
   </ItemGroup>
   <ItemGroup>
     <InterpreterReference Include="CondaEnv|CondaEnv|shore_gen" />
